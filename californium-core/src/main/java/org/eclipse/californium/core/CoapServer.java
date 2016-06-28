@@ -216,23 +216,36 @@ public class CoapServer implements ServerInterface {
 	@Override
 	public void stop() {
 		LOGGER.info("Stopping server");
-		for (Endpoint ep:endpoints)
+		for (Endpoint ep : endpoints) {
 			ep.stop();
+		}
 	}
-	
+
 	/**
 	 * Destroys the server, i.e., unbinds from all ports and frees all system resources.
 	 */
 	@Override
 	public void destroy() {
-		LOGGER.info("Destroy server");
-		for (Endpoint ep:endpoints)
-			ep.destroy();
+		LOGGER.info("Destroying server");
 		executor.shutdown(); // cannot be started again
+		for (Endpoint ep : endpoints) {
+			ep.destroy();
+		}
 		try {
-			boolean succ = executor.awaitTermination(5, TimeUnit.SECONDS);
-			if (!succ)
+			boolean succ = executor.awaitTermination(2, TimeUnit.SECONDS);
+			if (!succ) {
 				LOGGER.warning("Server executor did not shutdown in time");
+				List<Runnable> remainingTasks = executor.shutdownNow();
+				LOGGER.log(
+						Level.WARNING,
+						"Server executor has {0} remaining tasks scheduled:",
+						remainingTasks.size());
+				for (Runnable task : remainingTasks) {
+					LOGGER.log(Level.WARNING, "Running remaining task of type {0} ...", task.getClass().getName());
+					task.run();
+				}
+				executor.awaitTermination(2, TimeUnit.SECONDS);
+			}
 		} catch (InterruptedException e) {
 			LOGGER.log(Level.WARNING, "Exception while terminating server executor", e);
 		}
