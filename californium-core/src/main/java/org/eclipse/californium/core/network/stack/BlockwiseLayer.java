@@ -28,23 +28,25 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.californium.core.coap.BlockOption;
+import org.eclipse.californium.core.coap.CoAP.Code;
+import org.eclipse.californium.core.coap.CoAP.ResponseCode;
+import org.eclipse.californium.core.coap.CoAP.Type;
 import org.eclipse.californium.core.coap.EmptyMessage;
 import org.eclipse.californium.core.coap.Message;
 import org.eclipse.californium.core.coap.MessageObserverAdapter;
 import org.eclipse.californium.core.coap.OptionSet;
 import org.eclipse.californium.core.coap.Request;
 import org.eclipse.californium.core.coap.Response;
-import org.eclipse.californium.core.coap.CoAP.Code;
-import org.eclipse.californium.core.coap.CoAP.ResponseCode;
-import org.eclipse.californium.core.coap.CoAP.Type;
 import org.eclipse.californium.core.network.Exchange;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.californium.core.network.config.NetworkConfigObserverAdapter;
 
+/**
+ * Provides transparent handling of blockwise transfer of large payloads.
+ */
 public class BlockwiseLayer extends AbstractLayer {
 
-	/** The logger. */
-	protected final static Logger LOGGER = Logger.getLogger(BlockwiseLayer.class.getCanonicalName());
+	private static final Logger LOGGER = Logger.getLogger(BlockwiseLayer.class.getCanonicalName());
 
 	// TODO: Size Option. Include only in first block.
 	// TODO: DoS: server should have max allowed blocks/bytes/time to allocate.
@@ -141,16 +143,43 @@ public class BlockwiseLayer extends AbstractLayer {
 
 		} else if (requiresBlockwise(request)) {
 			// This must be a large POST or PUT request
-			LOGGER.log(Level.FINE, "Request payload {0}/{1} requires Blockwise", new Object[]{request.getPayloadSize(), max_message_size});
+			LOGGER.log(Level.FINE, "Request payload [size: {0}, max_message_size: {1}] requires Blockwise", new Object[]{request.getPayloadSize(), max_message_size});
 			BlockwiseStatus status = findRequestBlockStatus(exchange, request);
 
-			Request block = getNextRequestBlock(request, status);
+			final Request block = getNextRequestBlock(request, status);
+			block.addMessageObserver(new MessageObserverAdapter() {
+
+				private void copyToken() {
+					// when the request for transferring the first block
+					// has been sent out, we copy the token to the
+					// original request so that at the end of the
+					// blockwise transfer the Matcher can correctly
+					// close the overall exchange
+					request.setToken(block.getToken());
+				}
+
+				@Override
+				public void onAcknowledgement() {
+					copyToken();
+				}
+
+				@Override
+				public void onReject() {
+					copyToken();
+				}
+
+				@Override
+				public void onTimeout() {
+					copyToken();
+				}
+			});
 
 			exchange.setRequestBlockStatus(status);
 			exchange.setCurrentRequest(block);
 			super.sendRequest(exchange, block);
 
 		} else {
+			// no blockwise transer required
 			exchange.setCurrentRequest(request);
 			super.sendRequest(exchange, request);
 		}
@@ -338,6 +367,7 @@ public class BlockwiseLayer extends AbstractLayer {
 				status.setCurrentNum(nextNum);
 				status.setCurrentSzx(block1.getSzx());
 				Request nextBlock = getNextRequestBlock(exchange.getRequest(), status);
+
 				// we use the same token to ease traceability
 				nextBlock.setToken(response.getToken());
 
@@ -461,7 +491,9 @@ public class BlockwiseLayer extends AbstractLayer {
 					}
 
 					LOGGER.log(Level.FINE, "Assembled response: {0}", assembled);
-					// Set the original request as current request.
+					// Set the original request as current request so that
+					// the Matcher can clean up its state based on the latest
+					// ("current") request's MID and token
 					exchange.setCurrentRequest(exchange.getRequest());
 					// Set the assembled response as current response
 					exchange.setResponse(assembled);
@@ -706,7 +738,7 @@ public class BlockwiseLayer extends AbstractLayer {
 	/*
 	 * When a timeout occurs for a block it has to be forwarded to the origin response.
 	 */
-	public static class TimeoutForwarder extends MessageObserverAdapter {
+	private static class TimeoutForwarder extends MessageObserverAdapter {
 
 		private final Message message;
 
