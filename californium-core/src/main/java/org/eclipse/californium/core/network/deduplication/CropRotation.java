@@ -69,7 +69,7 @@ public class CropRotation implements Deduplicator {
 	}
 
 	@Override
-	public void start() {
+	public synchronized void start() {
 		if (running.compareAndSet(false, true)) {
 			if (executor == null || executor.isShutdown()) {
 				executor = Executors.newSingleThreadScheduledExecutor(new Utils.DaemonThreadFactory("Deduplicator"));
@@ -79,7 +79,7 @@ public class CropRotation implements Deduplicator {
 	}
 
 	@Override
-	public void stop() {
+	public synchronized void stop() {
 		if (running.compareAndSet(true, false)) {
 			rotation.cancel();
 			executor.shutdown();
@@ -111,9 +111,11 @@ public class CropRotation implements Deduplicator {
 
 	@Override
 	public void clear() {
-		maps[0].clear();
-		maps[1].clear();
-		maps[2].clear();
+		synchronized (maps) {
+			maps[0].clear();
+			maps[1].clear();
+			maps[2].clear();
+		}
 	}
 
 	@Override
@@ -146,10 +148,12 @@ public class CropRotation implements Deduplicator {
 		}
 		
 		private void rotation() {
-			int third = first;
-			first = second;
-			second = (second+1)%3;
-			maps[third].clear();
+			synchronized (maps) {
+				int third = first;
+				first = second;
+				second = (second+1)%3;
+				maps[third].clear();
+			}
 		}
 		
 		private void schedule() {

@@ -64,7 +64,7 @@ public abstract class BaseMatcher implements Matcher {
 	}
 
 	@Override
-	public void start() {
+	public synchronized void start() {
 		if (running.compareAndSet(false, true)) {
 			assertMessageExchangeStoreIsSet();
 			exchangeStore.start();
@@ -72,7 +72,7 @@ public abstract class BaseMatcher implements Matcher {
 	}
 
 	@Override
-	public void stop() {
+	public synchronized void stop() {
 		if (running.compareAndSet(true, false)) {
 			exchangeStore.stop();
 			clear();
