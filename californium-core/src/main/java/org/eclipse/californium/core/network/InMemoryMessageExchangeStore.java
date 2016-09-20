@@ -335,7 +335,7 @@ public class InMemoryMessageExchangeStore implements MessageExchangeStore {
 	}
 
 	@Override
-	public void start() {
+	public synchronized void start() {
 		if (running.compareAndSet(false, true)) {
 			startStatusLogging();
 			if (deduplicator == null) {
@@ -354,7 +354,7 @@ public class InMemoryMessageExchangeStore implements MessageExchangeStore {
 	 * Stops this store and purges all registered exchanges.
 	 */
 	@Override
-	public void stop() {
+	public synchronized void stop() {
 		if (running.compareAndSet(true, false)) {
 			if (statusLogger != null) {
 				statusLogger.cancel(false);

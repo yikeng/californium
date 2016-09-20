@@ -48,7 +48,7 @@ public final class SweepDeduplicator implements Deduplicator {
 	private final static Logger LOGGER = Logger.getLogger(SweepDeduplicator.class.getName());
 
 	/** The hash map with all incoming messages. */
-	private final Map<KeyMID, Exchange> incomingMessages;
+	private final Map<KeyMID, Exchange> incomingMessages = new ConcurrentHashMap<>();
 	private final AtomicBoolean running = new AtomicBoolean(false);
 	private ScheduledExecutorService scheduler;
 	private SweepAlgorithm algorithm;
@@ -69,12 +69,11 @@ public final class SweepDeduplicator implements Deduplicator {
 	 * @param config the configuration to use.
 	 */
 	public SweepDeduplicator(final NetworkConfig config) {
-		incomingMessages = new ConcurrentHashMap<KeyMID, Exchange>();
 		algorithm = new SweepAlgorithm(config);
 	}
 
 	@Override
-	public void start() {
+	public synchronized void start() {
 		if (running.compareAndSet(false, true)) {
 			if (scheduler == null || scheduler.isShutdown()) {
 				scheduler = Executors.newSingleThreadScheduledExecutor(new Utils.DaemonThreadFactory("Deduplicator"));
@@ -84,7 +83,7 @@ public final class SweepDeduplicator implements Deduplicator {
 	}
 
 	@Override
-	public void stop() {
+	public synchronized void stop() {
 		if (running.compareAndSet(true, false)) {
 			algorithm.cancel();
 			scheduler.shutdown();
