@@ -46,7 +46,7 @@ public abstract class BaseMatcher implements Matcher {
 	}
 
 	@Override
-	public final void setMessageExchangeStore(final MessageExchangeStore store) {
+	public synchronized final void setMessageExchangeStore(final MessageExchangeStore store) {
 		if (running.get()) {
 			throw new IllegalStateException("MessageExchangeStore can only be set on stopped Matcher");
 		} else if (store == null) {
