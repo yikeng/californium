@@ -248,10 +248,6 @@ public class CoapServer implements ServerInterface {
 		LOGGER.info("Destroying server");
 		// prevent new tasks from being submitted
 		executor.shutdown(); // cannot be started again
-		for (Endpoint ep : endpoints) {
-			ep.destroy();
-		}
-		LOGGER.fine("all endpoints have been destroyed");
 		try {
 			// wait for currently executing tasks to complete
 			if (!executor.awaitTermination(1, TimeUnit.SECONDS)) {
@@ -270,6 +266,9 @@ public class CoapServer implements ServerInterface {
 			executor.shutdownNow();
 			Thread.currentThread().interrupt();
 		} finally {
+			for (Endpoint ep : endpoints) {
+				ep.destroy();
+			}
 			LOGGER.log(Level.INFO, "CoAP server has been destroyed");
 			running = false;
 		}
